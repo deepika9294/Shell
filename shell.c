@@ -86,6 +86,7 @@ int main() {
 	char* argv[128];
 	char cmd[256];
 	char delimeter[] = " ";
+	char s[100];
 	// shell_info();
 	while(1) {
 			argcount = 0;
@@ -107,7 +108,27 @@ int main() {
 			// for (int i = 0; i < argcount; i++ ){
 			// 	printf("%s\n", argv[i]);
 			// }
-			
+			if (*argv[0] == '\0') {
+				printf("\n");
+				continue;
+			}
+
+			/* Check if string equals "exit"*/
+			if (!(strcmp(argv[0] , "exit"))) {
+				break;
+			}
+
+			/* */
+			if(strcmp(argv[0], "cd") == 0) {    
+				// get home directory
+				if (argcount == 1) {
+					argv[1] = "/home/deepika";  	
+				}
+				if(chdir(argv[1]) == -1) {                                            
+					perror("cd");                                                   
+				}          
+				continue;                                                           
+			}
 
 			pid = fork();
 			if(pid == -1){
