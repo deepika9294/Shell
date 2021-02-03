@@ -12,17 +12,26 @@
 #include<setjmp.h>
 #include <signal.h>
 
-// struct instn {
-// 	char **cmd;
-// 	int argcount;
-// }
 
 // ************************************************************
 char prompt[1024];
 char cwd[1024]; 
+char home_dir[128];
 // char *cmd;
 
 // ************************************************************
+
+
+void get_home_directory() {
+	char *temp = getenv("HOME");
+		strcpy(home_dir, temp);
+		// write alternate code, if it fails
+
+        // if (home_dir != NULL) {
+        //         printf("Home dir in enviroment");
+        //         printf("%s\n", home_dir);
+        // }
+}
 
 void show_prompt() {
 	// getting current directory details, an printing prompt accordingly.
@@ -79,6 +88,14 @@ int read_input(char* cmd)
 void execute_command(char* parsed_cmd) {
 
 }
+
+// ***********************************************Redirection code*********************************
+
+
+// ************************************************************************************************
+
+
+
 int main() {
 	int pid;
 	int length = 0;
@@ -87,44 +104,61 @@ int main() {
 	char cmd[256];
 	char delimeter[] = " ";
 	char s[100];
+	char *temp_cmd;
 	// shell_info();
 	while(1) {
 			argcount = 0;
 			show_prompt();
 			if (read_input(cmd)) 
             	continue;
-			// read_input(cmd);
-			// printf("%s\n",cmd);
-			char *ptr = strtok(cmd, delimeter);
+			
+			temp_cmd = (char*)malloc(sizeof(cmd) + 1);
+			strcpy(temp_cmd,cmd);
+
+			// printf("teCMD %s\n", temp_cmd);
+
+			// basic parsing, separating a line with space in it.
+			char *ptr = strtok(temp_cmd, delimeter);
 			while(ptr != NULL)
 			{
 				// printf("'%s'\n", ptr);
 				argv[argcount++] = ptr;
 				ptr= strtok(NULL, delimeter);
 			}
-			printf("%d", argcount);
 			argv[argcount] = NULL;
-			
-			// for (int i = 0; i < argcount; i++ ){
-			// 	printf("%s\n", argv[i]);
-			// }
+
+			/*Debugging purpose*/
+			printf("-----------------\n");
+			for (int i = 0; i < argcount; i++ ){
+				printf("%s\n", argv[i]);
+			}
+			// printf("CMD %s\n", cmd);
+			printf("-----------------\n");
+
 			if (*argv[0] == '\0') {
-				printf("\n");
 				continue;
 			}
 
+
 			/* Check if string equals "exit"*/
 			if (!(strcmp(argv[0] , "exit"))) {
+				printf("Exiting....");
 				break;
 			}
 
 			/* */
 			if(strcmp(argv[0], "cd") == 0) {    
 				// get home directory
+
 				if (argcount == 1) {
-					argv[1] = "/home/deepika";  	
+					get_home_directory();	
+					if(chdir(home_dir) == -1) {
+						perror("cd");
+					}
+					// printf(" hd %s", home_dir);
+
 				}
-				if(chdir(argv[1]) == -1) {                                            
+				else if(chdir(argv[1]) == -1) {                                            
 					perror("cd");                                                   
 				}          
 				continue;                                                           
