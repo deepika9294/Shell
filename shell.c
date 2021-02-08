@@ -252,6 +252,7 @@ void get_output_file(char* cmd, int loc, char* output_file) {
 	for(int i = loc + 2; i < strlen(cmd) && cmd[i]!=' '; i++) {
 		output_file[j++] = cmd[i];
 	}
+	
 	return;
 }
 
@@ -289,16 +290,14 @@ void output_redirect(char** cmd, char* output_file) {
 int redirection_tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	char *temp_cmd;
 	int count = 0;
-
+	printf("--%s--\n",delimeter);
 	temp_cmd = (char*)malloc(sizeof(cmd) + 1);
 	strcpy(temp_cmd,cmd);
-
-
 	// basic parsing, separating a line with space in it.
 	char *ptr = strtok(temp_cmd, delimeter);
 	while(ptr != NULL)
 	{
-		// printf("'%s'\n", ptr);
+		printf("'%s'\n", ptr);
 		redirect_cmd[count++] = ptr;
 		ptr= strtok(NULL, delimeter);
 	}
@@ -346,7 +345,7 @@ int main() {
 			if(input_redirect_loc != -1) {
 				get_input_file(cmd,input_redirect_loc,input_file);
 				printf("input:%s",input_file);
-				redirection_tokenisation(cmd," < ",redirect_cmd);
+				redirection_tokenisation(cmd,"<",redirect_cmd);
 				// if it exist
 				argcount = space_tokenisation(redirect_cmd[0],argv);
 				
@@ -355,8 +354,15 @@ int main() {
 			output_redirect_loc = string_compare(cmd, '>');
 			if(output_redirect_loc != -1) {
 				get_output_file(cmd, output_redirect_loc, output_file);
-				redirection_tokenisation(cmd," > ",redirect_cmd);
+				redirection_tokenisation(cmd,">",redirect_cmd);
+				printf("REdirect: %s\n",redirect_cmd[0]);
 				argcount = space_tokenisation(redirect_cmd[0],argv);
+			// 	printf("-----------------\n");
+			// for (int i = 0; i < argcount; i++ ){
+			// 	printf("%s---\n", argv[i]);
+			// }
+			// // printf("CMD %s\n", cmd);
+			// printf("-----------------\n");
 				// printf("%")
 				// execute_command(pid,argv,argcount);
 			}
@@ -421,6 +427,7 @@ int main() {
 				if(output_redirect_loc != -1) {
 					output_redirect(argv,output_file);
 				}
+				printf("\argv:%s",argv[0]);
 				if (execvp(argv[0], argv) < 0) { 
 					printf("\nCould not execute command..\n"); 
 				} 
