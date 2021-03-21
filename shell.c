@@ -13,12 +13,12 @@
 #include <signal.h>
 
 
-// ************************************************************
-char prompt[1024];
-char cwd[1024]; 
-char home_dir[128];
-int is_pipe = 0;
-int is_redirect = 0; 
+// ******************************GLOBAL VARIABLES******************************
+char prompt[1024];		//buffer variable to display a prompt while shell is running
+char cwd[1024]; 		//variable to store the current working directory
+char home_dir[128];		//variable for hd, required for command "cd"
+int is_pipe = 0;		//whether it is a pipe command or not
+int is_redirect = 0; 	//whether it is a redirection command or not
 
 
 // ************************************************************
@@ -27,13 +27,13 @@ int is_redirect = 0;
 
 void get_home_directory() {
 	char *temp = getenv("HOME");
-		strcpy(home_dir, temp);
-		// write alternate code, if it fails
+	strcpy(home_dir, temp);
+	//alternate code, if it fails
+	if(home_dir == NULL) {
+		perror("Error: Could not access home directory");
+		exit(1);
+	}
 
-        // if (home_dir != NULL) {
-        //         printf("Home dir in enviroment");
-        //         printf("%s\n", home_dir);
-        // }
 }
 
 void show_prompt() {
@@ -53,30 +53,23 @@ void show_prompt() {
 
 }
 
-void shell_info() 
-{ 
+void shell_info() { 
     system("clear");
-    printf("\n\n\n\n******************"
-        "************************"); 
+    printf("\n\n\n\n******************************************"); 
 	printf("\n\n\t-WELCOME TO MY SHELL"); 
-    printf("\n\n\n\n*******************"
-        "***********************"); 
+    printf("\n\n\n\n******************************************"); 
     printf("\n"); 
 
-	// uncomment below code, if need to clear it the initialisation screen
-
+	//comment below code, if do not want to clear it the initialisation screen
     sleep(2); 
     system("clear");
-
 } 
 
-int read_input(char* cmd) 
-{ 
+int read_input(char* cmd) { 
     char* buffer; 
-	
     buffer = readline("");
     // strcpy(cmd, buffer); 
-	
+
     if (strlen(buffer) != 0) { 
         // add_history(buffer); 
         strcpy(cmd, buffer); 
@@ -86,46 +79,6 @@ int read_input(char* cmd)
     } 
 } 
 
-// int get_redirection_type(char* cmd) {
-// 	/*
-// 	*	if normal-0
-// 	*	if redirect-1
-// 	*	if pipes-2
-// 	*	if pipes and redirect-3	(mostly not required)
-// 	*	----->for return types
-// 	*/
-
-
-// 	/*
-// 	*	1. input-redirect -1
-// 	*	2. out-redirect -2
-// 		3. input-output - 3
-// 	*	3. error-redirect - 4
-// 	*	4. for changing structure value
-// 	*/
-// 	char input_redirect = '<';
-// 	char output_redirect = '>';
-// 	char output_redirect_append[2] = ">>";
-// 	char error_redirect[2] = "2>";
-
-// 	printf("\n pikaboo:%s\n",cmd);
-// 	// writng code just for < and > , later modify it
-// 	for(int i = 0; i < strlen(cmd); i++) {
-// 		if(cmd[i] == input_redirect || cmd[i] == output_redirect) {
-// 			if(cmd[i] == input_redirect) {
-// 				tc.redirect = 1;
-// 			}
-// 			else {
-// 				tc.redirect = 2;
-// 			}
-// 			cmd_type = 1;
-// 			return i;
-// 		}
-// 	}
-// 	cmd_type = 0;
-// 	return -1;
-
-// }
 int space_tokenisation(char *cmd, char **argv) {
 	char delimeter[] = " ";
 	char count = 0;
@@ -147,36 +100,6 @@ int space_tokenisation(char *cmd, char **argv) {
 	return count;
 }
 
-// int redirection_tokenisation(char *cmd, char** redirect_cmd) {
-	
-// 	char delimeter[2];
-// 	if(tc.redirect == 1) {
-// 		strcpy(delimeter, "<");
-// 	}
-// 	if(tc.redirect == 2) {
-// 		strcpy(delimeter, ">");
-// 	}
-// 	// char *redirect_cmd[128];
-// 	char *temp_cmd;
-// 	int count = 0;
-
-// 	temp_cmd = (char*)malloc(sizeof(cmd) + 1);
-// 	strcpy(temp_cmd,cmd);
-
-
-// 	// basic parsing, separating a line with space in it.
-// 	char *ptr = strtok(temp_cmd, delimeter);
-// 	while(ptr != NULL)
-// 	{
-// 		// printf("'%s'\n", ptr);
-// 		redirect_cmd[count++] = ptr;
-// 		ptr= strtok(NULL, delimeter);
-// 	}
-// 	return count;
-
-
-// }
-
 
 void execute_command(int pid ,char** argv, int argcount) {
 
@@ -185,26 +108,22 @@ void execute_command(int pid ,char** argv, int argcount) {
 		return;
 	}
 
-
 	/* Check if string equals "exit"*/
 	if (!(strcmp(argv[0] , "exit"))) {
 		printf("Exiting....\n");
 		// break;
 		exit(EXIT_SUCCESS);
-
 	}
 
 	/* */
 	if(strcmp(argv[0], "cd") == 0) {    
 		// get home directory
-
 		if (argcount == 1) {
 			get_home_directory();	
 			if(chdir(home_dir) == -1) {
 				perror("cd");
 			}
 			// printf(" hd %s", home_dir);
-
 		}
 		else if(chdir(argv[1]) == -1) {                                            
 			perror("cd");                                                   
@@ -215,7 +134,7 @@ void execute_command(int pid ,char** argv, int argcount) {
 
 
 	pid = fork();
-	if(pid == -1){
+	if(pid == -1) {
 		perror("Error in forking");
 		exit(0);
 
@@ -256,7 +175,7 @@ void get_output_file(char* cmd, int loc, char* output_file) {
 	return;
 }
 
-int string_compare(char* cmd, char ch) {
+int redirection_string_compare(char* cmd, char ch) {
 	for(int i = 0; i < (strlen(cmd)); i++ ) {
 		if(cmd[i] == ch) {
 			return i;
@@ -341,7 +260,7 @@ int main() {
 
 			argcount = space_tokenisation(cmd,argv);
 
-			input_redirect_loc =string_compare(cmd, '<');
+			input_redirect_loc =redirection_string_compare(cmd, '<');
 			if(input_redirect_loc != -1) {
 				get_input_file(cmd,input_redirect_loc,input_file);
 				printf("input:%s",input_file);
@@ -351,11 +270,18 @@ int main() {
 				
 
 			}
-			output_redirect_loc = string_compare(cmd, '>');
+			output_redirect_loc = redirection_string_compare(cmd, '>');
 			if(output_redirect_loc != -1) {
 				get_output_file(cmd, output_redirect_loc, output_file);
 				redirection_tokenisation(cmd,">",redirect_cmd);
+				printf("Redirect: %s\n",redirect_cmd[0]);
+				if(input_redirect_loc != -1) {
+					redirection_tokenisation(cmd, "< >", redirect_cmd);
+				}
 				printf("REdirect: %s\n",redirect_cmd[0]);
+				printf("REdirect: %s\n",redirect_cmd[1]);
+
+
 				argcount = space_tokenisation(redirect_cmd[0],argv);
 			// 	printf("-----------------\n");
 			// for (int i = 0; i < argcount; i++ ){
@@ -373,10 +299,13 @@ int main() {
 
 
 			/*Debugging purpose*/
-			printf("-----------------\n");
+			printf("--------DEBUGGING---------\n");
 			for (int i = 0; i < argcount; i++ ){
 				printf("%s\n", argv[i]);
 			}
+			printf("\nINPUT FILE: %s", input_file);
+			printf("\nOUTPUT FILE: %s\n", output_file);
+
 			// printf("CMD %s\n", cmd);
 			printf("-----------------\n");
 			// execute_command(pid,argv,argcount);
