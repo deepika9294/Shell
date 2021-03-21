@@ -28,46 +28,54 @@ void create_pipe(char ***c)
 	int fd[2] = {-1,-1};
 	pid_t pid, fpid;
     //make an array of pids
-	int fdd = 0, count=0;				/* Backup */
-    int flag = 0;
-    //while(1){
-        //scanf("%d", &flag);
-		count = 0;
-        while (*c != NULL) {
-			pipe(fd);				/* Sharing bidiflow */
-			printf("%d %d\n", fd[0], fd[1]);
-			if ((pid = fork()) == -1) {
-				perror("fork");
-				exit(1);
+	int fdd = 0, count=0;				
+	count = 0;
+	while (*c != NULL) {
+		pipe(fd);				
+		printf("%d %d\n", fd[0], fd[1]);
+		// int input_redirect_loc =redirection_string_compare(cmd, '<');
+		// if(input_redirect_loc != -1) {
+		// 	get_input_file(cmd,input_redirect_loc,input_file);
+		// 	redirection_tokenisation(cmd,"<",redirect_cmd);
+		// 	argcount = space_tokenisation(redirect_cmd[0],argv);
+		// }
+		// output_redirect_loc = redirection_string_compare(cmd, '>');
+		// if(output_redirect_loc != -1) {
+		// 	get_output_file(cmd, output_redirect_loc, output_file);
+		// 	redirection_tokenisation(cmd,">",redirect_cmd);
+		// 	if(input_redirect_loc != -1) {
+		// 		redirection_tokenisation(cmd, "< >", redirect_cmd);
+		// 	}
+		// 	argcount = space_tokenisation(redirect_cmd[0],argv);
+		// }
+		
+		if ((pid = fork()) == -1) {
+			perror("fork");
+			exit(1);
+		}
+		else if (pid == 0) {
+			if (*(c + 1) != NULL) {
+				dup2(fd[1], 1); 
 			}
-			else if (pid == 0) {
-				
-				if (*(c + 1) != NULL) {
-					dup2(fd[1], 1); //stdout->pipe_output
-				}
-				dup2(fdd, 0);//read end of the previous command why??????
-				close(fd[0]);//close current input
-				execvp((*c)[0], *c);
-			}
-			else {
-				c++;
-				count++;
-				fdd = fd[0];//why fd[0]-> whatever is written to the current pipe can be read by the next command only from this fd[0] and not from fd[1] even if fd[1] is going to be the reading end of next command
-				close(fd[1]);
-				
-			}
-        
-	    }
+			dup2(fdd, 0);
+			close(fd[0]);
+			execvp((*c)[0], *c);
+		}
+		else {
+			c++;
+			count++;
+			fdd = fd[0];
+			close(fd[1]);
+		}
+	}
 	int i = 0, cpid;
 	while(i<count){
 		cpid = wait(NULL);
 		i++;
 	}
-    printf("prompt>");
-    //}
-	
-    
 }
+
+
 
 void get_home_directory() {
 	char *temp = getenv("HOME");
@@ -168,15 +176,10 @@ void execute_command(char** argv, int argcount) {
 }
 void get_input_file(char* cmd, int loc, char* input_file) {
 	int j = 0;
-	// for(int i = 0; i < loc -1; i++) {
 	for(int i = loc + 2; i < strlen(cmd) && cmd[i]!=' '; i++) {
-
 		input_file[j++] = cmd[i];
 	}
-	// for (int i = 0; i < j ;i++ ){
-	// 	cmd[loc-1] = cmd[j+5];
-	// }
-	// printf("%s", cmd);
+	
 	return;
 }
 void get_output_file(char* cmd, int loc, char* output_file) {
@@ -236,7 +239,26 @@ int redirection_tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	}
 	return count;
 }
+void check_redirection(char* cmd, int input_redirect_loc, int output_redirect_loc, char *input_file, char *output_file, char **redirect_cmd, int argcount, char** argv) {
+	input_redirect_loc = redirection_string_compare(cmd, '<');
+	if(input_redirect_loc != -1) {
+		get_input_file(cmd,input_redirect_loc,input_file);
+		redirection_tokenisation(cmd,"<",redirect_cmd);
+		argcount = space_tokenisation(redirect_cmd[0],argv);
+	}
+	output_redirect_loc = redirection_string_compare(cmd, '>');
+	if(output_redirect_loc != -1) {
+		get_output_file(cmd, output_redirect_loc, output_file);
+		redirection_tokenisation(cmd,">",redirect_cmd);
+		if(input_redirect_loc != -1) {
+			redirection_tokenisation(cmd, "< >", redirect_cmd);
+		}
+		argcount = space_tokenisation(redirect_cmd[0],argv);
+	}
 
+}
+
+// void pipe_redirection(char** cmd, int )
 
 int main() {
 	int pid;
@@ -278,70 +300,40 @@ int main() {
 		if(pipe_loc != -1) {
 			printf("Enter pipe\n");
 			pipe_count = redirection_tokenisation(cmd, "|", pipe_cmd);
-			// printf("Damn %d\n", pipe_count);
 			char*** A = (char***)malloc((pipe_count+1) * sizeof(char**));
-
 
 			for(int i = 0; i < pipe_count;i++) {
 				printf("Print i : %d", i);
 				argcount1 = space_tokenisation(pipe_cmd[i],argv1);
 				A[i] = (char**)malloc((argcount1 +1) * sizeof(char*));
 				
-				// A[i] = argv1;
 				for(int j = 0;j < argcount1; j++) {
 					A[i][j] = (char *)malloc(64 * sizeof(char));
 					strcpy(A[i][j], argv1[j]);
 				}
 				A[i][argcount1] = NULL;
-				printf("\n");
 			}
 			A[pipe_count] = NULL;
 			
-			// argcount1 = space_tokenisation(pipe_cmd[0],argv1);
-			// 	for(int j = 0;j <= argcount1; j++) {
-			// 		printf(" ' %s '", argv1[j]);
-			// 	}
-			// 	printf("\n");
-			// argcount2 = space_tokenisation(pipe_cmd[1],argv2);
-			// for(int j = 0;j <= argcount2; j++) {
-			// 		printf(" ' %s '", argv2[j]);
-			// 	}
-			// 	printf("\n");
-			// char **c[] = {argv1, argv2, NULL};
-			// c[0] = argv1;
-			// c[1] = argv2;
-			// c[2] = NULL;
 			create_pipe(A);
 			continue;
 		}
-
+		// check_redirection(cmd,input_redirect_loc,output_redirect_loc, input_file, output_file, redirect_cmd, argcount, argv);
 		input_redirect_loc =redirection_string_compare(cmd, '<');
 		if(input_redirect_loc != -1) {
 			get_input_file(cmd,input_redirect_loc,input_file);
-			printf("input:%s",input_file);
 			redirection_tokenisation(cmd,"<",redirect_cmd);
-			// if it exist
 			argcount = space_tokenisation(redirect_cmd[0],argv);
-			
-
 		}
 		output_redirect_loc = redirection_string_compare(cmd, '>');
 		if(output_redirect_loc != -1) {
 			get_output_file(cmd, output_redirect_loc, output_file);
 			redirection_tokenisation(cmd,">",redirect_cmd);
-			printf("Redirect: %s\n",redirect_cmd[0]);
 			if(input_redirect_loc != -1) {
 				redirection_tokenisation(cmd, "< >", redirect_cmd);
 			}
-			// printf("REdirect: %s\n",redirect_cmd[0]);
-			// printf("REdirect: %s\n",redirect_cmd[1]);
-
-
 			argcount = space_tokenisation(redirect_cmd[0],argv);
-		
 		}
-		
-		
 		
 		
 
@@ -400,7 +392,6 @@ int main() {
 		}
 		if(pid == 0) {
 			// printf("%s", argv[2]);
-			printf("IS PIPe");
 			if(input_redirect_loc != -1) {
 				input_redirect(argv,input_file);
 			}
