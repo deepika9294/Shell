@@ -223,16 +223,68 @@ int redirection_tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	return count;
 }
 
+void create_pipe(char **argv1, char **argv2) {
+	int fds[2];	//dual pipe
+	pid_t p1, p2;
+	if(pipe(fds) < 0) {
+		perror("\n Error in initialising the pipe");
+		exit(1);
+	}
+	// creating another process by fork
+	p1 = fork();
+	if (p1 < 0) {
+		perror("\nError in forking");
+		exit(1);
+	}
+	if(p1 == 0) {
+		// So we need to close the read end and write to write end
+		close(fds[0]);
+		dup2(fds[1], STDOUT_FILENO);
+		close(fds[1]);
+
+		if (execvp(argv1[0], argv1) < 0) { 
+			printf("\nCould not execute command..\n"); 
+		} 
+	}
+	else {
+		p2 = fork();
+		if (p2 < 0) {
+			perror("\nError in forking");
+			exit(1);
+		}
+		// so now we nead to close write end and read it from the read end
+		if(p2 == 0) {
+			close(fds[1]);
+			dup2(fds[0], STDIN_FILENO);
+			close(fds[0]);
+			if (execvp(argv2[0], argv2) < 0) { 
+				printf("\nCould not execute command..\n"); 
+			} 
+		}
+		else {
+			for (int i = 0; i < 2; i++) {
+				wait(NULL);
+			}
+		}
+	}
+}
+
 int main() {
 	int pid;
 	int length = 0;
 	int argcount = 0;
+	int argcount1 = 0;
+	int argcount2 = 0;
 	char* argv[128];
+	char* argv1[128];
+	char* argv2[128];
+
 	char cmd[256];
 	char delimeter[] = " ";
 	char s[100];
 	char *temp_cmd;
 	char *redirect_cmd[128];
+	char *pipe_cmd[128];
 	int redirect_count;
 	int input_redirect_loc;
 	int output_redirect_loc;
@@ -241,132 +293,135 @@ int main() {
 	char output_file[64];
 	char *rc;
 	int fd;
-
+	int pipe_loc;
+	// int pid[2];
 	// initialising types to be nilll
 
 	// struct type_command tc;
 	// shell_info();
 	while(1) {
-			argcount = 0;
-			show_prompt();
-			if (read_input(cmd)) 
-            	continue;
+		argcount = 0;
+		show_prompt();
+		if (read_input(cmd)) 
+			continue;
+		
+		// check if redirection is present.
+		// if(strchr(cmd, '|')) {
+		// 	printf("Not implemented");
+		// 	continue;
+		// }
+
+		argcount = space_tokenisation(cmd,argv);
+
+		input_redirect_loc =redirection_string_compare(cmd, '<');
+		if(input_redirect_loc != -1) {
+			get_input_file(cmd,input_redirect_loc,input_file);
+			printf("input:%s",input_file);
+			redirection_tokenisation(cmd,"<",redirect_cmd);
+			// if it exist
+			argcount = space_tokenisation(redirect_cmd[0],argv);
 			
-			// check if redirection is present.
-			if(strchr(cmd, '|')) {
-				printf("Not implemented");
-				continue;
-			}
 
-			argcount = space_tokenisation(cmd,argv);
-
-			input_redirect_loc =redirection_string_compare(cmd, '<');
+		}
+		output_redirect_loc = redirection_string_compare(cmd, '>');
+		if(output_redirect_loc != -1) {
+			get_output_file(cmd, output_redirect_loc, output_file);
+			redirection_tokenisation(cmd,">",redirect_cmd);
+			printf("Redirect: %s\n",redirect_cmd[0]);
 			if(input_redirect_loc != -1) {
-				get_input_file(cmd,input_redirect_loc,input_file);
-				printf("input:%s",input_file);
-				redirection_tokenisation(cmd,"<",redirect_cmd);
-				// if it exist
-				argcount = space_tokenisation(redirect_cmd[0],argv);
-				
+				redirection_tokenisation(cmd, "< >", redirect_cmd);
+			}
+			// printf("REdirect: %s\n",redirect_cmd[0]);
+			// printf("REdirect: %s\n",redirect_cmd[1]);
+
+
+			argcount = space_tokenisation(redirect_cmd[0],argv);
+		
+		}
+		pipe_loc = redirection_string_compare(cmd, '|');
+		if(pipe_loc != -1) {
+			redirection_tokenisation(cmd, "|", pipe_cmd);
+			argcount1 = space_tokenisation(pipe_cmd[0],argv1);
+			argcount2 = space_tokenisation(pipe_cmd[1],argv2);
+
+			printf("PIPE: %s\n",pipe_cmd[0]);
+		}
+		
+		
+
+		/*Debugging purpose*/
+		printf("--------DEBUGGING---------\n");
+		for (int i = 0; i < argcount; i++ ){
+			printf("%s\n", argv[i]);
+		}
+		printf("\nINPUT FILE: %s", input_file);
+		printf("\nOUTPUT FILE: %s\n", output_file);
+
+		// printf("CMD %s\n", cmd);
+		printf("-----------------\n");
+		// execute_command(pid,argv,argcount);
+		if (*argv[0] == '\0') {
+			continue;
+			// return;
+		}
+
+		/* Check if string equals "exit"*/
+		if (!(strcmp(argv[0] , "exit"))) {
+			printf("Exiting....\n");
+			break;
+			// exit(EXIT_SUCCESS);
+
+		}
+
+		/* */
+		if(strcmp(argv[0], "cd") == 0) {    
+			// get home directory
+
+			if (argcount == 1) {
+				get_home_directory();	
+				if(chdir(home_dir) == -1) {
+					perror("cd");
+				}
+				// printf(" hd %s", home_dir);
 
 			}
-			output_redirect_loc = redirection_string_compare(cmd, '>');
+			else if(chdir(argv[1]) == -1) {                                            
+				perror("cd");                                                   
+			}          
+			continue;    
+			// return;                                                       
+		}
+
+
+		pid = fork();
+		if(pid == -1){
+			perror("Error in forking");
+			exit(0);
+
+		}
+		if(pid == 0) {
+			// printf("%s", argv[2]);
+			if(input_redirect_loc != -1) {
+				input_redirect(argv,input_file);
+			}
 			if(output_redirect_loc != -1) {
-				get_output_file(cmd, output_redirect_loc, output_file);
-				redirection_tokenisation(cmd,">",redirect_cmd);
-				printf("Redirect: %s\n",redirect_cmd[0]);
-				if(input_redirect_loc != -1) {
-					redirection_tokenisation(cmd, "< >", redirect_cmd);
-				}
-				printf("REdirect: %s\n",redirect_cmd[0]);
-				printf("REdirect: %s\n",redirect_cmd[1]);
-
-
-				argcount = space_tokenisation(redirect_cmd[0],argv);
-			// 	printf("-----------------\n");
-			// for (int i = 0; i < argcount; i++ ){
-			// 	printf("%s---\n", argv[i]);
-			// }
-			// // printf("CMD %s\n", cmd);
-			// printf("-----------------\n");
-				// printf("%")
-				// execute_command(pid,argv,argcount);
+				output_redirect(argv,output_file);
 			}
-
-			// input_redirect(cmd,input_file);
-
-			
-
-
-			/*Debugging purpose*/
-			printf("--------DEBUGGING---------\n");
-			for (int i = 0; i < argcount; i++ ){
-				printf("%s\n", argv[i]);
+			if(pipe_loc != -1) {
+				printf("Enter pipe");
+				create_pipe(argv1,argv2);
 			}
-			printf("\nINPUT FILE: %s", input_file);
-			printf("\nOUTPUT FILE: %s\n", output_file);
-
-			// printf("CMD %s\n", cmd);
-			printf("-----------------\n");
-			// execute_command(pid,argv,argcount);
-			if (*argv[0] == '\0') {
-				continue;
-				// return;
-			}
-
-			/* Check if string equals "exit"*/
-			if (!(strcmp(argv[0] , "exit"))) {
-				printf("Exiting....\n");
-				break;
-				// exit(EXIT_SUCCESS);
-
-			}
-
-			/* */
-			if(strcmp(argv[0], "cd") == 0) {    
-				// get home directory
-
-				if (argcount == 1) {
-					get_home_directory();	
-					if(chdir(home_dir) == -1) {
-						perror("cd");
-					}
-					// printf(" hd %s", home_dir);
-
-				}
-				else if(chdir(argv[1]) == -1) {                                            
-					perror("cd");                                                   
-				}          
-				continue;    
-				// return;                                                       
-			}
-
-
-			pid = fork();
-			if(pid == -1){
-				perror("Error in forking");
-				exit(0);
-
-			}
-			if(pid == 0) {
-				// printf("%s", argv[2]);
-				if(input_redirect_loc != -1) {
-					input_redirect(argv,input_file);
-				}
-				if(output_redirect_loc != -1) {
-					output_redirect(argv,output_file);
-				}
-				printf("\argv:%s",argv[0]);
+			if(pipe_loc == -1) {
 				if (execvp(argv[0], argv) < 0) { 
 					printf("\nCould not execute command..\n"); 
 				} 
-				exit(0);
-			} else {
-				//printf("in parent %d \n", pid);
-				wait(0);
 			}
+			exit(0);
+		} else {
+			//printf("in parent %d \n", pid);
+			wait(0);
+		}
 	}
-	exit(EXIT_SUCCESS);
-
+	// exit(EXIT_SUCCESS);
 	return 0;
 }
