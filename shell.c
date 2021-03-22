@@ -22,6 +22,10 @@ int is_redirect = 0; 	//whether it is a redirection command or not
 // static jmp_buf env;
 static sigjmp_buf env;
 static volatile sig_atomic_t jump_active = 0;
+int pid_stop;
+int bg[64];
+int bg_count = 0;
+pid_t shell_id;
 
 
 
@@ -292,7 +296,22 @@ void handle_sigint(int signo) {
 
 }
 
-// void pipe_redirection(char** cmd, int )
+void handle_sigstp(int signo) {
+	if(pid_stop == shell_id) {
+		fprintf(stdout, "\n");
+		show_prompt();
+		return;
+	}
+	bg[bg_count++] = pid_stop;
+	fprintf(stdout, "\n[%d]+:	Stopped		Pid: %d\n", bg_count, pid_stop);
+	if(!jump_active) {
+        return;
+    }
+	siglongjmp(env, 73);
+	// kill(pid_stop,SIGTSTP);
+
+}
+
 
 int main() {
 	int pid;
@@ -321,11 +340,17 @@ int main() {
 	int pipe_loc;
 	int pipe_count;
 
-
+	shell_id = getpid();
+	// pid_stop = shell_id;
 
 	signal(SIGINT, handle_sigint);
+	// signal(SIGTSTP, SIG_IGN);
+
+	signal(SIGTSTP, handle_sigstp);
 	// shell_info();
 	while(1) {
+		// shell_id = getpid();
+		pid_stop = shell_id;
 		if (sigsetjmp(env, 1) == 73) {
             printf("\n");
 			// show_prompt();
@@ -360,14 +385,13 @@ int main() {
 			// 	printf("' %s ' ", A[0][j]);
 			// }
 			create_pipe(A);
-			printf("ddd");
+			// printf("ddd");
 			continue;
 		}
 		
 
 		if(pipe_loc == -1) {
 			argcount = space_tokenisation(cmd,argv);
-			printf("sss");
 			input_redirect_loc =string_compare(cmd, '<');
 			if(input_redirect_loc != -1) {
 				get_input_file(cmd,input_redirect_loc,input_file);
@@ -384,15 +408,15 @@ int main() {
 				argcount = space_tokenisation(redirect_cmd[0],argv);
 			}
 			/*Debugging purpose*/
-			printf("--------DEBUGGING---------\n");
-			for (int i = 0; i < argcount; i++ ){
-				printf("%s\n", argv[i]);
-			}
-			printf("\nINPUT FILE: %s", input_file);
-			printf("\nOUTPUT FILE: %s\n", output_file);
+			// printf("--------DEBUGGING---------\n");
+			// for (int i = 0; i < argcount; i++ ){
+			// 	printf("%s\n", argv[i]);
+			// }
+			// printf("\nINPUT FILE: %s", input_file);
+			// printf("\nOUTPUT FILE: %s\n", output_file);
 
-			// printf("CMD %s\n", cmd);
-			printf("-----------------\n");
+			// // printf("CMD %s\n", cmd);
+			// printf("-----------------\n");
 			// execute_command(pid,argv,argcount);
 
 
@@ -430,6 +454,8 @@ int main() {
 
 
 		pid = fork();
+		pid_stop = pid;
+
 		if(pid == -1){
 			perror("Error in forking");
 			exit(0);
@@ -437,8 +463,9 @@ int main() {
 		}
 		if(pid == 0) {
 			// printf("%s", argv[2]);
-			// signal(SIGINT, handle_sigint);
+			// pid_stop = pid;
 			signal(SIGINT, SIG_DFL);
+			signal(SIGTSTP, SIG_DFL);
 
 			if(input_redirect_loc != -1) {
 				input_redirect(argv,input_file);
