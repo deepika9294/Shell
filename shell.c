@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <assert.h>
-#include<setjmp.h>
+#include <setjmp.h>
 #include <signal.h>
 
 
@@ -19,6 +19,11 @@ char cwd[1024]; 		//variable to store the current working directory
 char home_dir[128];		//variable for hd, required for command "cd"
 int is_pipe = 0;		//whether it is a pipe command or not
 int is_redirect = 0; 	//whether it is a redirection command or not
+// static jmp_buf env;
+static sigjmp_buf env;
+static volatile sig_atomic_t jump_active = 0;
+
+
 
 
 // ************************************************************
@@ -104,6 +109,7 @@ void create_pipe(char ***c)
 			exit(1);
 		}
 		else if (pid == 0) {
+			signal(SIGINT, SIG_DFL);
 			dup2(fdd, STDIN_FILENO);
 			
 			if (c[x+1] != NULL) {
@@ -278,7 +284,13 @@ int tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	}
 	return count;
 }
+void handle_sigint(int signo) {
+	if (!jump_active) {
+        return;
+    }
+	siglongjmp(env, 73);
 
+}
 
 // void pipe_redirection(char** cmd, int )
 
@@ -309,8 +321,18 @@ int main() {
 	int pipe_loc;
 	int pipe_count;
 
+
+
+	signal(SIGINT, handle_sigint);
 	// shell_info();
 	while(1) {
+		if (sigsetjmp(env, 1) == 73) {
+            printf("\n");
+			// show_prompt();
+
+        }
+		jump_active = 1;        /* Set the flag */
+
 		argcount = 0;
 		show_prompt();
 		if (read_input(cmd)) 
@@ -415,6 +437,9 @@ int main() {
 		}
 		if(pid == 0) {
 			// printf("%s", argv[2]);
+			// signal(SIGINT, handle_sigint);
+			signal(SIGINT, SIG_DFL);
+
 			if(input_redirect_loc != -1) {
 				input_redirect(argv,input_file);
 			}
