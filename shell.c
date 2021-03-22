@@ -24,7 +24,7 @@ static sigjmp_buf env;
 static volatile sig_atomic_t jump_active = 0;
 int pid_stop;
 int bg[64];
-char *bg_cmd[128];
+char bg_cmd[128][128];
 int bg_count = 0;
 pid_t shell_id;
 char t_cmd[128];
@@ -304,9 +304,10 @@ void handle_sigstp(int signo) {
 		return;
 	}
 	bg[bg_count] = pid_stop;
-	bg_cmd[bg_count] = t_cmd;
+	// bg_cmd[bg_count] = t_cmd;
+	strcpy(bg_cmd[bg_count], t_cmd);
 	bg_count++;
-	fprintf(stdout, "\n[%d]+:	Stopped		Pid: %d\n", bg_count, pid_stop);
+	fprintf(stdout, "\n[%d]+:	Stopped		Pid: %d\n", bg_count-1, pid_stop);
 	if(!jump_active) {
         return;
     }
@@ -314,11 +315,22 @@ void handle_sigstp(int signo) {
 	// kill(pid_stop,SIGTSTP);
 
 }
-void handle_fg(char *c) {
-
-	printf("\n%s",c);
-	printf("%d %s",bg[0], bg_cmd[0]);
-	kill(bg[0],SIGCONT);
+void remove_bg(int process) {
+	for(int i = process; i < bg_count-1; i++ ) {
+		strcpy(bg_cmd[process],bg_cmd[process+1]);
+		bg[process] = bg[process + 1];
+	}
+	bg_count--;
+}
+void handle_fg(int process) {
+	if(process > bg_count) {
+		printf("Background Process doesn't exist\n");
+		return;
+	}
+	// printf("\n%s\n",c);
+	printf("\n%s\n",bg_cmd[process]);
+	kill(bg[process],SIGCONT);
+	remove_bg(process);
 	siglongjmp(env,73);
 }
 
@@ -433,10 +445,19 @@ int main() {
 			// execute_command(pid,argv,argcount);
 
 		if(strcmp(argv[0], "fg") == 0) {
-			// printf("MAJJA\n");
-			handle_fg(bg_cmd[0]);
+			if(bg_count != 0) {
+				if(argcount >= 2) {
+					// handle_fg(bg_cmd[atoi(argv[1])], atoi(argv[1]));
+					handle_fg(atoi(argv[1]));
+				}
+				handle_fg(0);
+			}
+			else {
+				printf("No Processes in background\n");
+			}
+			
 			// kill(bg[0],SIGCONT);
-			// continue;
+			continue;
 		}
 		if (*argv[0] == '\0') {
 			continue;
