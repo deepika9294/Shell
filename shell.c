@@ -24,9 +24,10 @@ static sigjmp_buf env;
 static volatile sig_atomic_t jump_active = 0;
 int pid_stop;
 int bg[64];
+char bg_cmd[128][128];
 int bg_count = 0;
 pid_t shell_id;
-
+char t_cmd[128];
 
 
 
@@ -275,14 +276,14 @@ int string_compare(char* cmd, char ch) {
 int tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	char *temp_cmd;
 	int count = 0;
-	printf("--%s--\n",delimeter);
+	// printf("--%s--\n",delimeter);
 	temp_cmd = (char*)malloc(sizeof(cmd) + 1);
 	strcpy(temp_cmd,cmd);
 	// basic parsing, separating a line with space in it.
 	char *ptr = strtok(temp_cmd, delimeter);
 	while(ptr != NULL)
 	{
-		printf("'%s'\n", ptr);
+		// printf("'%s'\n", ptr);
 		redirect_cmd[count++] = ptr;
 		ptr= strtok(NULL, delimeter);
 	}
@@ -302,14 +303,35 @@ void handle_sigstp(int signo) {
 		show_prompt();
 		return;
 	}
-	bg[bg_count++] = pid_stop;
-	fprintf(stdout, "\n[%d]+:	Stopped		Pid: %d\n", bg_count, pid_stop);
+	bg[bg_count] = pid_stop;
+	// bg_cmd[bg_count] = t_cmd;
+	strcpy(bg_cmd[bg_count], t_cmd);
+	bg_count++;
+	fprintf(stdout, "\n[%d]+:	Stopped		Pid: %d\n", bg_count-1, pid_stop);
 	if(!jump_active) {
         return;
     }
 	siglongjmp(env, 73);
 	// kill(pid_stop,SIGTSTP);
 
+}
+void remove_bg(int process) {
+	for(int i = process; i < bg_count-1; i++ ) {
+		strcpy(bg_cmd[process],bg_cmd[process+1]);
+		bg[process] = bg[process + 1];
+	}
+	bg_count--;
+}
+void handle_fg(int process) {
+	if(process > bg_count) {
+		printf("Background Process doesn't exist\n");
+		return;
+	}
+	// printf("\n%s\n",c);
+	printf("\n%s\n",bg_cmd[process]);
+	kill(bg[process],SIGCONT);
+	remove_bg(process);
+	siglongjmp(env,73);
 }
 
 
@@ -350,6 +372,7 @@ int main() {
 	// shell_info();
 	while(1) {
 		// shell_id = getpid();
+		
 		pid_stop = shell_id;
 		if (sigsetjmp(env, 1) == 73) {
             printf("\n");
@@ -363,10 +386,11 @@ int main() {
 		if (read_input(cmd)) 
 			continue;
 		
+		strcpy(t_cmd,cmd);	//for bg
 
 		pipe_loc = string_compare(cmd, '|');
 		if(pipe_loc != -1) {
-			printf("Enter pipe\n");
+			// printf("Enter pipe\n");
 			pipe_count = tokenisation(cmd, "|", pipe_cmd);
 			char*** A = (char***)malloc((pipe_count+1) * sizeof(char**));
 
@@ -392,6 +416,7 @@ int main() {
 
 		if(pipe_loc == -1) {
 			argcount = space_tokenisation(cmd,argv);
+			
 			input_redirect_loc =string_compare(cmd, '<');
 			if(input_redirect_loc != -1) {
 				get_input_file(cmd,input_redirect_loc,input_file);
@@ -419,7 +444,21 @@ int main() {
 			// printf("-----------------\n");
 			// execute_command(pid,argv,argcount);
 
-
+		if(strcmp(argv[0], "fg") == 0) {
+			if(bg_count != 0) {
+				if(argcount >= 2) {
+					// handle_fg(bg_cmd[atoi(argv[1])], atoi(argv[1]));
+					handle_fg(atoi(argv[1]));
+				}
+				handle_fg(0);
+			}
+			else {
+				printf("No Processes in background\n");
+			}
+			
+			// kill(bg[0],SIGCONT);
+			continue;
+		}
 		if (*argv[0] == '\0') {
 			continue;
 			// return;
