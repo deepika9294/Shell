@@ -137,8 +137,6 @@ void create_pipe(char ***c)
 	// }
 }
 
-
-
 void get_home_directory() {
 	char *temp = getenv("HOME");
 	strcpy(home_dir, temp);
