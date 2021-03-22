@@ -36,23 +36,28 @@ int check_symbol(char **cmd, char *symbol) {
 	}
 	return -1;
 }
-void input_redirect(char** cmd, char* input_file) {
+int input_redirect(char** cmd, char* input_file) {
 	// open file and read;
-	close(0);
+	// close(0);
 	int fd = open(input_file, O_RDONLY);
 	if(fd == -1) {
 		perror("Error in reading input file");
 		exit(0);
 	}
+	dup2(fd, STDIN_FILENO); 
+	close(fd);
+	return 0;
 }
 
 void output_redirect(char** cmd, char* output_file) {
-	close(1);
+	// close(1);
 	int fd = open(output_file, O_WRONLY | O_CREAT, 0666);
 	if(fd == -1) {
 		perror("Error in writing to output file");
 		exit(0);
 	}
+	dup2(fd, STDOUT_FILENO); 
+	close(fd);
 	return;
 }
 
@@ -63,9 +68,10 @@ void create_pipe(char ***c)
     //make an array of pids
 	int fdd = 0, count=0;				
 	count = 0;
+	int  f = 0;
+	int q = 0;
 	int i_loc, o_loc;
 	char i_file[128], o_file[128];
-	printf("%s", c[0][0]);
 	// while(*c != NULL) {
 	// 	while(**c != NULL) {
 	// 		printf("' %s '", **)
@@ -80,13 +86,14 @@ void create_pipe(char ***c)
 	// }
 	// while (*c != NULL) {
 	for ( int x = 0; c[x] != NULL; x++) {
+		
 		pipe(fd);				
-		printf("%d %d\n", fd[0], fd[1]);
+		// printf("%d %d\n", fd[0], fd[1]);
 		i_loc = check_symbol(c[x], "<");
 		if(i_loc != -1) {
-			// printf("YEAH %s", c[x][i_loc + 1]);
 			strcpy(i_file, c[x][i_loc + 1]);
 		}
+		
 		o_loc = check_symbol(c[x], ">");
 		if(o_loc != -1) {
 			strcpy(o_file, c[x][o_loc+1]);
@@ -97,10 +104,12 @@ void create_pipe(char ***c)
 			exit(1);
 		}
 		else if (pid == 0) {
+			dup2(fdd, STDIN_FILENO);
+			
 			if (c[x+1] != NULL) {
-				dup2(fd[1], 1); 
+				dup2(fd[1], STDOUT_FILENO); 
 			}
-			dup2(fdd, 0);
+			
 			close(fd[0]);
 			if(i_loc != -1) {
 				input_redirect(c[x],i_file);
@@ -108,20 +117,24 @@ void create_pipe(char ***c)
 			if(o_loc != -1) {
 				output_redirect(c[x],o_file);
 			}
-			execvp(c[x][0], c[x]);
+			if (execvp(c[x][0], c[x]) < 0) { 
+				printf("\nCould not execute command..\n");
+				exit(1);
+
+			} 
 		}
 		else {
-			// x++;
-			count++;
+			wait(NULL);
+			// count++;
 			fdd = fd[0];
 			close(fd[1]);
 		}
 	}
-	int i = 0, cpid;
-	while(i<count){
-		cpid = wait(NULL);
-		i++;
-	}
+	// int i = 0, cpid;
+	// while(i<count){
+	// 	cpid = wait(NULL);
+	// 	i++;
+	// }
 }
 
 
@@ -305,7 +318,6 @@ int main() {
 		if (read_input(cmd)) 
 			continue;
 		
-		argcount = space_tokenisation(cmd,argv);
 
 		pipe_loc = string_compare(cmd, '|');
 		if(pipe_loc != -1) {
@@ -328,11 +340,13 @@ int main() {
 			// 	printf("' %s ' ", A[0][j]);
 			// }
 			create_pipe(A);
+			printf("ddd");
 			continue;
 		}
 		
 
 		if(pipe_loc == -1) {
+			argcount = space_tokenisation(cmd,argv);
 			printf("sss");
 			input_redirect_loc =string_compare(cmd, '<');
 			if(input_redirect_loc != -1) {
