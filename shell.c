@@ -1,3 +1,24 @@
+/*
+	D-SHELL
+	Following features are implemented:
+	1. Read commands in a loop
+	2. Show User based prompt
+	3. Can run simple commands
+	4. Can do cd into directories
+	5. Output(>) and input(<) redirection (individually as well as combined)
+	6. Can Support multiple pipes. 
+	7. Pipes(|) and redirection(< >) combination is also implemented
+	8. Handle signals Ctrl-C and Ctrl-Z
+	9. Can run process in fg and bg
+		to run process in fg (type):
+		fg <id>
+		Please note, this id is basically the id which was returned to shell prompt after CTRL+Z 
+
+	10. To exit the program, type exit
+	******************************************CODE BEGINS*************************************************
+*/
+
+
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
@@ -11,6 +32,8 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <signal.h>
+
+// COLORS FOR SHELL
 #define COLOR_CYAN "\033[0;36m"
 #define COLOR_GREEN "\033[0;32;32m"
 #define COLOR_NONE "\033[m"
