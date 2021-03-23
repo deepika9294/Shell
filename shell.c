@@ -11,6 +11,9 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <signal.h>
+#define COLOR_CYAN "\033[0;36m"
+#define COLOR_GREEN "\033[0;32;32m"
+#define COLOR_NONE "\033[m"
 
 
 // ******************************GLOBAL VARIABLES******************************
@@ -27,7 +30,7 @@ char bg_cmd[64][128];	//commands. can be done in structure too
 int bg_count = 0;
 pid_t shell_id;			//to store the process id of shell
 char t_cmd[128];		
-
+int is_bg_process = 0;
 
 
 // ************************************************************
@@ -189,7 +192,7 @@ void show_prompt() {
 		strcat(prompt, "@prompt:");
 		strcat(prompt, cwd);
 		strcat(prompt, "$ ");
-		printf("%s", prompt);
+		printf(COLOR_GREEN "%s" COLOR_NONE, prompt);
     }
     else{
         perror("Something went wrong, while fetching cwd");
@@ -355,6 +358,10 @@ void handle_sigint(int signo) {
 	if (!jump_active) {
         return;
     }
+	if(is_bg_process == 1) {
+		signal(SIGINT, SIG_DFL);
+		// wait(NULL);
+	}
 	siglongjmp(env, 73);
 
 }
@@ -367,6 +374,9 @@ void handle_sigint(int signo) {
 */
 
 void handle_sigstp(int signo) {
+	if(is_bg_process == 1) {
+		siglongjmp(env, 73);
+	}
 	if(pid_stop == shell_id || pid_stop == bg[bg_count-1]) {
 		fprintf(stdout, "\n");
 		show_prompt();
@@ -427,6 +437,26 @@ void handle_fg(int process) {
 	siglongjmp(env,73);
 }
 
+
+void handle_bg(int process) {
+	
+	if(process > bg_count) {
+		printf("Process doesn't exist\n");
+		siglongjmp(env,73);
+
+	}
+	if(bg[process] == -1 ) {
+		printf("fg: %d :No such job\n", process);
+		siglongjmp(env,73);
+
+	}
+	printf("\n%s\n",bg_cmd[process]);
+	kill(bg[process],SIGCONT);
+	remove_bg(process);
+	siglongjmp(env,73);
+
+}
+
 // ------------------------------------------MAIN DRIVER CODE----------------------------------------------------
 int main() {
 	int pid;
@@ -454,7 +484,6 @@ int main() {
 	int fd;
 	int pipe_loc;
 	int pipe_count;
-
 	shell_id = getpid();
 	// pid_stop = shell_id;
 
@@ -467,6 +496,8 @@ int main() {
 		// shell_id = getpid();
 		
 		pid_stop = shell_id;
+		is_bg_process = 0;
+
 		if (sigsetjmp(env, 1) == 73) {
             printf("\n");
 			// show_prompt();
@@ -475,8 +506,11 @@ int main() {
 
 		argcount = 0;
 		show_prompt();
+		
+
 		if (read_input(cmd)) 
 			continue;
+		
 		
 		strcpy(t_cmd,cmd);	//for bg
 
@@ -541,7 +575,6 @@ int main() {
 		if(strcmp(argv[0], "fg") == 0) {
 			if(bg_count != 0) {
 				if(argcount >= 2) {
-					// handle_fg(bg_cmd[atoi(argv[1])], atoi(argv[1]));
 					handle_fg(atoi(argv[1]));
 				}
 				handle_fg(bg_count-1);
@@ -554,7 +587,16 @@ int main() {
 		}
 
 		if(strcmp(argv[0], "bg") == 0) {
-			printf("not implemented");
+			is_bg_process = 1;
+			if(bg_count != 0) {
+				if(argcount >= 2) {
+					handle_bg(atoi(argv[1]));
+				}
+				handle_fg(bg_count-1);
+			}
+			else {
+				printf("No Processes in background\n");
+			}
 			continue;
 		}
 
@@ -617,7 +659,8 @@ int main() {
 			exit(0);
 		} else {
 			//printf("in parent %d \n", pid);
-			wait(0);
+			// wait(0);
+			waitpid(pid,0, WUNTRACED);
 		}
 	}}
 	exit(EXIT_SUCCESS);
