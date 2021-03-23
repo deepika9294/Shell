@@ -11,6 +11,9 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <signal.h>
+#define COLOR_CYAN "\033[0;36m"
+#define COLOR_GREEN "\033[0;32;32m"
+#define COLOR_NONE "\033[m"
 
 
 // ******************************GLOBAL VARIABLES******************************
@@ -19,19 +22,23 @@ char cwd[1024]; 		//variable to store the current working directory
 char home_dir[128];		//variable for hd, required for command "cd"
 int is_pipe = 0;		//whether it is a pipe command or not
 int is_redirect = 0; 	//whether it is a redirection command or not
-// static jmp_buf env;
-static sigjmp_buf env;
-static volatile sig_atomic_t jump_active = 0;
-int pid_stop;
-int bg[64];
-char bg_cmd[128][128];
+static sigjmp_buf env;	//buffer env variable for jumping
+static volatile sig_atomic_t jump_active = 0;	
+int pid_stop;			//id which is passed when ctrl+z is pressed
+int bg[64];				//64 max process can be there in bg
+char bg_cmd[64][128];	//commands. can be done in structure too
 int bg_count = 0;
-pid_t shell_id;
-char t_cmd[128];
-
+pid_t shell_id;			//to store the process id of shell
+char t_cmd[128];		
+int is_bg_process = 0;
 
 
 // ************************************************************
+/*
+*this function takes in array of strings as a command and 
+*check whether a particular symbol is present in it or not
+*/
+
 int check_symbol(char **cmd, char *symbol) {
 	int i = 0;
 	int k;
@@ -49,6 +56,10 @@ int check_symbol(char **cmd, char *symbol) {
 	}
 	return -1;
 }
+/*
+	This function closes the standard input strem and assign fd to the input file,
+	to read from the file
+*/
 int input_redirect(char** cmd, char* input_file) {
 	// open file and read;
 	// close(0);
@@ -62,6 +73,11 @@ int input_redirect(char** cmd, char* input_file) {
 	return 0;
 }
 
+/*
+	This function closes the standard output strem and assign fd to the output file,
+	to write to the file
+*/
+
 void output_redirect(char** cmd, char* output_file) {
 	// close(1);
 	int fd = open(output_file, O_WRONLY | O_CREAT, 0666);
@@ -74,23 +90,23 @@ void output_redirect(char** cmd, char* output_file) {
 	return;
 }
 
+/*
+	Function to execute Multiple Pipes with redirections as well, 
+	and create child processes accordingly and execute the commands.
+*/
+
 void create_pipe(char ***c)
 {
 	int fd[2] = {-1,-1};
-	pid_t pid, fpid;
-    //make an array of pids
-	int fdd = 0, count=0;				
-	count = 0;
+	pid_t pid;
+	int fdd = 0;				
 	int  f = 0;
 	int q = 0;
 	int i_loc, o_loc;
 	char i_file[128], o_file[128];
-	// while(*c != NULL) {
-	// 	while(**c != NULL) {
-	// 		printf("' %s '", **)
-	// 	}
+	
+	//DEBUGGING CODE for checking cmd variable
 
-	// }
 	// for ( int x = 0; c[x] != NULL; x++) {
 	// 	for(int y = 0; c[x][y] != NULL; y++) {
 	// 		printf("' %s '", c[x][y]);
@@ -101,7 +117,6 @@ void create_pipe(char ***c)
 	for ( int x = 0; c[x] != NULL; x++) {
 		
 		pipe(fd);				
-		// printf("%d %d\n", fd[0], fd[1]);
 		i_loc = check_symbol(c[x], "<");
 		if(i_loc != -1) {
 			strcpy(i_file, c[x][i_loc]);
@@ -113,11 +128,13 @@ void create_pipe(char ***c)
 		}
 		
 		if ((pid = fork()) == -1) {
-			perror("fork");
-			exit(1);
+			perror("Error in fork");
+			return;
 		}
 		else if (pid == 0) {
 			signal(SIGINT, SIG_DFL);
+			signal(SIGTSTP, SIG_DFL);
+
 			dup2(fdd, STDIN_FILENO);
 			
 			if (c[x+1] != NULL) {
@@ -134,23 +151,22 @@ void create_pipe(char ***c)
 			if (execvp(c[x][0], c[x]) < 0) { 
 				printf("\nCould not execute command..\n");
 				exit(1);
-
 			} 
 		}
 		else {
 			wait(NULL);
-			// count++;
 			fdd = fd[0];
 			close(fd[1]);
 		}
 		free(c[x]);
 	}
-	// int i = 0, cpid;
-	// while(i<count){
-	// 	cpid = wait(NULL);
-	// 	i++;
-	// }
 }
+
+/*
+	Function to get the home directory which is used for printing prompt 
+	and in executing "cd" command
+*/
+
 
 void get_home_directory() {
 	char *temp = getenv("HOME");
@@ -163,6 +179,11 @@ void get_home_directory() {
 
 }
 
+/*
+	Function to show the user friendly prompt, comprises of
+	name+@promt+cwd+$
+*/
+
 void show_prompt() {
 	// getting current directory details, an printing prompt accordingly.
 	char* user_name = getenv("USER"); 
@@ -171,7 +192,7 @@ void show_prompt() {
 		strcat(prompt, "@prompt:");
 		strcat(prompt, cwd);
 		strcat(prompt, "$ ");
-		printf("%s", prompt);
+		printf(COLOR_GREEN "%s" COLOR_NONE, prompt);
     }
     else{
         perror("Something went wrong, while fetching cwd");
@@ -180,10 +201,14 @@ void show_prompt() {
 
 }
 
+/*WELCOME FUNCTION*/
+
 void shell_info() { 
     system("clear");
     printf("\n\n\n\n******************************************"); 
 	printf("\n\n\t-WELCOME TO MY SHELL"); 
+	printf("\n\n\t					-Deepika Goyal"); 
+
     printf("\n\n\n\n******************************************"); 
     printf("\n"); 
 
@@ -191,6 +216,12 @@ void shell_info() {
     sleep(2); 
     system("clear");
 } 
+
+/*
+	Function to read input from main function using readline library, 
+	which helps in autocompleting the commands too. Copies the input in cmd. 
+	This is called at every iteration in main()
+*/
 
 int read_input(char* cmd) { 
     char* buffer; 
@@ -206,6 +237,11 @@ int read_input(char* cmd) {
     } 
 } 
 
+/*
+	Typical function to separate a string based on space as a delimeter and forms an array of string.
+	Also returns the count of null terminated array
+*/
+
 int space_tokenisation(char *cmd, char **argv) {
 	char delimeter[] = " ";
 	char count = 0;
@@ -214,19 +250,20 @@ int space_tokenisation(char *cmd, char **argv) {
 	temp_cmd = (char*)malloc(sizeof(cmd) + 1);
 	strcpy(temp_cmd,cmd);
 
-
 	// basic parsing, separating a line with space in it.
 	char *ptr = strtok(temp_cmd, delimeter);
 	while(ptr != NULL)
 	{
-		// printf("'%s'\n", ptr);
 		argv[count++] = ptr;
 		ptr= strtok(NULL, delimeter);
 	}
 	argv[count] = NULL;
 	return count;
 }
-
+/*
+	Function to execute a command by creating child.
+	(Note, currently this function is not in use, just for backup purpose)
+*/
 
 void execute_command(char** argv, int argcount) {
 
@@ -237,18 +274,20 @@ void execute_command(char** argv, int argcount) {
 
 	}
 	if(pid == 0) {
-		// printf("%s", argv[2]);
 		if (execvp(argv[0], argv) < 0) { 
 			printf("\nCould not execute command..\n"); 
 		} 
 		exit(0);
 	} else {
-		//printf("in parent %d \n", pid);
 		wait(0);
 	}
 	return;
-
 }
+
+/*
+	This function takes in the cmd and the location where redirection was found and 
+	accordingly finds input filename
+*/
 void get_input_file(char* cmd, int loc, char* input_file) {
 	int j = 0;
 	for(int i = loc + 2; i < strlen(cmd) && cmd[i]!=' '; i++) {
@@ -257,6 +296,13 @@ void get_input_file(char* cmd, int loc, char* input_file) {
 	
 	return;
 }
+
+/*
+	This function takes in the cmd and the location where redirection was found and 
+	accordingly finds output filename
+
+*/
+
 void get_output_file(char* cmd, int loc, char* output_file) {
 	int j = 0;
 	// check for more conditions
@@ -267,6 +313,11 @@ void get_output_file(char* cmd, int loc, char* output_file) {
 	return;
 }
 
+/*
+	This function takes in cmd and a character, 
+	if a charater is found then return the location else return -1
+*/
+
 int string_compare(char* cmd, char ch) {
 	for(int i = 0; i < (strlen(cmd)); i++ ) {
 		if(cmd[i] == ch) {
@@ -276,6 +327,10 @@ int string_compare(char* cmd, char ch) {
 	return -1;
 }
 
+/*
+	General tokenisation , which takes in a string and delimeter and 
+	create a null terminated array of strings separated by the delimeter
+*/
 
 int tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	char *temp_cmd;
@@ -293,22 +348,50 @@ int tokenisation(char* cmd, char* delimeter, char** redirect_cmd) {
 	}
 	return count;
 }
+
+/*
+	General handler function called by parent process for handling CTRL+C signal, 
+	it basically restart the shell/ iteration
+*/
+
 void handle_sigint(int signo) {
 	if (!jump_active) {
         return;
     }
+	if(is_bg_process == 1) {
+		// signal(SIGINT, SIG_IGN);
+		// while(1);	//bad idea
+		return;
+	}
 	siglongjmp(env, 73);
 
 }
 
+/*
+	General handler function called by parent process for handling CTRL+Z signals,
+	It first checks for the shell id and if found equal, it returns.
+	Else it stores the pid_stop id in the global variable along with cmd and update the count
+	bg_count starts with 0 and can have maximum as 64
+*/
+
 void handle_sigstp(int signo) {
-	if(pid_stop == shell_id) {
+	if(is_bg_process == 1) {
+	// 	siglongjmp(env, 73);
+		// while(1);
+		return;
+
+	}
+	if(pid_stop == shell_id || pid_stop == bg[bg_count-1]) {
 		fprintf(stdout, "\n");
 		show_prompt();
 		return;
+		// if(!jump_active) {
+        // 	return;
+   		// }
+		// siglongjmp(env, 73);
+
 	}
 	bg[bg_count] = pid_stop;
-	// bg_cmd[bg_count] = t_cmd;
 	strcpy(bg_cmd[bg_count], t_cmd);
 	bg_count++;
 	fprintf(stdout, "\n[%d]+:	Stopped		Pid: %d\n", bg_count-1, pid_stop);
@@ -316,20 +399,40 @@ void handle_sigstp(int signo) {
         return;
     }
 	siglongjmp(env, 73);
-	// kill(pid_stop,SIGTSTP);
 
 }
+
+/*
+*/
 void remove_bg(int process) {
-	for(int i = process; i < bg_count-1; i++ ) {
-		strcpy(bg_cmd[process],bg_cmd[process+1]);
-		bg[process] = bg[process + 1];
-	}
-	bg_count--;
+	// refill it with 0 and provide error handling
+	// for(int i = process; i < bg_count-1; i++ ) {
+	// 	strcpy(bg_cmd[process],bg_cmd[process+1]);
+	// 	bg[process] = bg[process + 1];
+	// }
+	// bg_count--;
+	strcpy(bg_cmd[process], "");
+	bg[process] = -1;
+
 }
+
+/*
+	Handle foreground process, takes in the bg_id of the process which needs to be executed
+	do some error checking, like background procees exist or not etc, and edit the global bg array
+*/
 void handle_fg(int process) {
 	if(process > bg_count) {
 		printf("Background Process doesn't exist\n");
-		return;
+		// return;
+		// exit(1);
+		siglongjmp(env,73);
+
+	}
+	if(bg[process] == -1 ) {
+		printf("fg: %d :No such job\n", process);
+		siglongjmp(env,73);
+
+		// return;
 	}
 	// printf("\n%s\n",c);
 	printf("\n%s\n",bg_cmd[process]);
@@ -339,6 +442,26 @@ void handle_fg(int process) {
 }
 
 
+void handle_bg(int process) {
+	
+	if(process > bg_count) {
+		printf("Process doesn't exist\n");
+		siglongjmp(env,73);
+
+	}
+	if(bg[process] == -1 ) {
+		printf("fg: %d :No such job\n", process);
+		siglongjmp(env,73);
+
+	}
+	printf("\n%s\n",bg_cmd[process]);
+	kill(bg[process],SIGCONT);
+	remove_bg(process);
+	siglongjmp(env,73);
+
+}
+
+// ------------------------------------------MAIN DRIVER CODE----------------------------------------------------
 int main() {
 	int pid;
 	int length = 0;
@@ -365,30 +488,30 @@ int main() {
 	int fd;
 	int pipe_loc;
 	int pipe_count;
-
 	shell_id = getpid();
 	// pid_stop = shell_id;
 
 	signal(SIGINT, handle_sigint);
-	// signal(SIGTSTP, SIG_IGN);
-
 	signal(SIGTSTP, handle_sigstp);
-	// shell_info();
 	while(1) {
 		// shell_id = getpid();
 		
 		pid_stop = shell_id;
+		is_bg_process = 0;
+
 		if (sigsetjmp(env, 1) == 73) {
             printf("\n");
 			// show_prompt();
-
         }
 		jump_active = 1;        /* Set the flag */
 
 		argcount = 0;
 		show_prompt();
+		
+
 		if (read_input(cmd)) 
 			continue;
+		
 		
 		strcpy(t_cmd,cmd);	//for bg
 
@@ -453,18 +576,31 @@ int main() {
 		if(strcmp(argv[0], "fg") == 0) {
 			if(bg_count != 0) {
 				if(argcount >= 2) {
-					// handle_fg(bg_cmd[atoi(argv[1])], atoi(argv[1]));
 					handle_fg(atoi(argv[1]));
 				}
-				handle_fg(0);
+				handle_fg(bg_count-1);
 			}
 			else {
 				printf("No Processes in background\n");
 			}
 			
-			// kill(bg[0],SIGCONT);
 			continue;
 		}
+
+		if(strcmp(argv[0], "bg") == 0) {
+			is_bg_process = 1;
+			if(bg_count != 0) {
+				if(argcount >= 2) {
+					handle_bg(atoi(argv[1]));
+				}
+				handle_fg(bg_count-1);
+			}
+			else {
+				printf("No Processes in background\n");
+			}
+			continue;
+		}
+
 		if (*argv[0] == '\0') {
 			continue;
 			// return;
@@ -524,7 +660,8 @@ int main() {
 			exit(0);
 		} else {
 			//printf("in parent %d \n", pid);
-			wait(0);
+			// wait(0);
+			waitpid(pid,0, WUNTRACED);
 		}
 	}}
 	exit(EXIT_SUCCESS);
