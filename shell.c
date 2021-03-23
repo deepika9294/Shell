@@ -34,13 +34,16 @@ char t_cmd[128];
 // ************************************************************
 int check_symbol(char **cmd, char *symbol) {
 	int i = 0;
+	int k;
 	for(int j = 0; cmd[j] != NULL; j++) {
 		// printf(" %s ", cmd[j]);
 		if(strcmp(cmd[j], symbol) == 0){
-			for(int k = j; cmd[k] != NULL; k++) {
+			for(k = j; cmd[k] != NULL; k++) {
 				if(cmd[k+1] != NULL)
 					cmd[k] = cmd[k+1];
 			}
+			cmd[k-1] = NULL;
+			free(cmd[k]);
 			return j;
 		}
 	}
@@ -101,12 +104,12 @@ void create_pipe(char ***c)
 		// printf("%d %d\n", fd[0], fd[1]);
 		i_loc = check_symbol(c[x], "<");
 		if(i_loc != -1) {
-			strcpy(i_file, c[x][i_loc + 1]);
+			strcpy(i_file, c[x][i_loc]);
 		}
 		
 		o_loc = check_symbol(c[x], ">");
 		if(o_loc != -1) {
-			strcpy(o_file, c[x][o_loc+1]);
+			strcpy(o_file, c[x][o_loc]);
 		}
 		
 		if ((pid = fork()) == -1) {
@@ -140,6 +143,7 @@ void create_pipe(char ***c)
 			fdd = fd[0];
 			close(fd[1]);
 		}
+		free(c[x]);
 	}
 	// int i = 0, cpid;
 	// while(i<count){
@@ -410,6 +414,8 @@ int main() {
 			// }
 			create_pipe(A);
 			// printf("ddd");
+			free(A);
+			// for()
 			continue;
 		}
 		
