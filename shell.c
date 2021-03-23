@@ -359,8 +359,9 @@ void handle_sigint(int signo) {
         return;
     }
 	if(is_bg_process == 1) {
-		signal(SIGINT, SIG_DFL);
-		// wait(NULL);
+		// signal(SIGINT, SIG_IGN);
+		// while(1);	//bad idea
+		return;
 	}
 	siglongjmp(env, 73);
 
@@ -375,7 +376,10 @@ void handle_sigint(int signo) {
 
 void handle_sigstp(int signo) {
 	if(is_bg_process == 1) {
-		siglongjmp(env, 73);
+	// 	siglongjmp(env, 73);
+		// while(1);
+		return;
+
 	}
 	if(pid_stop == shell_id || pid_stop == bg[bg_count-1]) {
 		fprintf(stdout, "\n");
@@ -488,10 +492,7 @@ int main() {
 	// pid_stop = shell_id;
 
 	signal(SIGINT, handle_sigint);
-	// signal(SIGTSTP, SIG_IGN);
-
 	signal(SIGTSTP, handle_sigstp);
-	// shell_info();
 	while(1) {
 		// shell_id = getpid();
 		
